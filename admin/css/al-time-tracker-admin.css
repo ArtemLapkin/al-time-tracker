@@ -1,0 +1,9 @@
+.al-form-wrap select {
+    margin: 0 15px;
+}
+.al-form-wrap input {
+    margin-right: 15px !important;
+}
+.al-pull-right {
+    float: right;
+}
