@@ -41,6 +41,8 @@ class Al_Time_Tracker_Admin {
 	private $version;
 
     private $option_name;
+    private $user_role;
+    private $months_to_show;
 
 
     /**
@@ -56,6 +58,8 @@ class Al_Time_Tracker_Admin {
 		$this->version = $version;
 
         $this->option_name = 'al_time_tracker';
+        $this->user_role = 'subscriber';
+        $this->months_to_show = 11;
 
 	}
 
@@ -126,11 +130,11 @@ class Al_Time_Tracker_Admin {
      * Print page for admin
      */
     public function page_admin_callback() {
-        $users_with_time_records = $this->get_all_users_with_time_records();
+        $users_with_time_records = $this->get_users_with_work_time_records();
 
         echo '<h2>'.__('Time Tracker' , 'al-time-tracker').'</h2>';
 
-        $months = $this->get_months_previous();
+        $months = $this->get_months_previous(); 
 
         if(empty($users_with_time_records)){
             echo '<div class="wrap">';
@@ -140,10 +144,10 @@ class Al_Time_Tracker_Admin {
         }
 
 
+        $current_month = intval(date('m'));
+        $current_month_timestamp = isset($_GET['month']) && intval($_GET['month']) ? intval($_GET['month']) : mktime(0, 0, 0, $current_month, 1);
+        $user_ID = isset($_GET['user_id']) && intval($_GET['user_id']) && get_userdata(intval($_GET['user_id'])) ? $_GET['user_id'] : $users_with_time_records[0]->ID;
 
-        $current_month = (int)date('m');
-        $current_month_timestamp = isset($_GET['month']) ? $_GET['month'] : mktime(0, 0, 0, $current_month, 1);
-        $user_ID = isset($_GET['user_id']) ? $_GET['user_id'] : $users_with_time_records[0]->ID;
 
         echo '<div class="al-form-wrap">';
         echo '<form method="get" action="' . $_SERVER['PHP_SELF'] . '">';
@@ -176,10 +180,7 @@ class Al_Time_Tracker_Admin {
         echo '</div>';
 
 
-        echo '<div class="wrap">';
-
-            $this->print_data($user_data);
-        echo '</div>';
+        $this->print_data($user_data);
     }
 
     /**
@@ -210,9 +211,7 @@ class Al_Time_Tracker_Admin {
 
         $user_data = $this->get_user_work_time_two_month();
 
-        echo '<div class="wrap">';
         $this->print_data($user_data);
-        echo '</div>';
     }
 
     /**
@@ -233,7 +232,7 @@ class Al_Time_Tracker_Admin {
             if(is_array($user_data) && !empty($user_data)){
                 $end = end($user_data);
                 if(isset($end['end']) && $end['end'] == false){
-                    _e('Time is already tracking now', 'al-time-tracker');
+                    _e('Time is already tracking', 'al-time-tracker');
                     return;
                 }
             }else{
@@ -293,7 +292,7 @@ class Al_Time_Tracker_Admin {
      * @param bool $user_id
      * @return array|mixed
      */
-    public function get_user_all_work_time($user_id = false) {
+    public function get_user_work_time_all($user_id = false) {
 
         $user_id = $user_id == false ? get_current_user_id() : $user_id;
 
@@ -305,7 +304,7 @@ class Al_Time_Tracker_Admin {
      * @return array
      */
     public function get_user_work_time_two_month() {
-        $user_data = $this->get_user_all_work_time();
+        $user_data = $this->get_user_work_time_all();
         $two_months_timestamp = strtotime('-2 months');
         $out = array();
         foreach ($user_data as $user_datum) {
@@ -325,7 +324,7 @@ class Al_Time_Tracker_Admin {
             _e('No time records', 'al-time-tracker');
             return;
         }
-
+        echo '<div class="wrap">';
         echo '<table class="wp-list-table widefat">';
         echo '<thead>';
         echo '<tr>';
@@ -355,6 +354,7 @@ class Al_Time_Tracker_Admin {
         }
         echo '</tbody>';
         echo '</table>';
+        echo '</div>';
     }
 
     /**
@@ -363,14 +363,13 @@ class Al_Time_Tracker_Admin {
      * @return array|mixed
      */
     public function get_user_work_time($user_ID) {
-//	    delete_user_meta($user_ID, $this->option_name);
         $data = get_user_meta($user_ID, $this->option_name, true);
         $data = is_array($data) ? $data : array();
         return $data;
     }
 
     /**
-     * updates user meta
+     * Updates user meta
      * @param $user_ID
      * @param $user_data
      * @return bool|int
@@ -403,11 +402,11 @@ class Al_Time_Tracker_Admin {
     }
 
     /**
-     * Get all users that have time records
+     * Returns all users that have work time records
      */
-    public function get_all_users_with_time_records() {
+    public function get_users_with_work_time_records() {
         $args = array(
-            'role'         => 'subscriber',
+            'role'         => $this->user_role,
             'meta_key'     => $this->option_name,
             'meta_value'   => '',
             'meta_compare' => '!=',
@@ -416,16 +415,13 @@ class Al_Time_Tracker_Admin {
     }
 
     /**
-     * Get -6 monts +6months
+     * Returns previous 12 months
      * @return array
      */
     public function get_months_previous() {
-
         $months= array();
 
-
-        $start    = new DateTime('11 months ago');
-
+        $start    = new DateTime($this->months_to_show. ' months ago');
         $start->modify('first day of this month');
         $end      = new DateTime();
         $interval = new DateInterval('P1M');
@@ -438,7 +434,7 @@ class Al_Time_Tracker_Admin {
     }
 
     /**
-     * Get time records for user for particular month
+     * Returns time records of particular user for particular month
      * @param $user_ID
      * @param $month
      * @return array
@@ -446,6 +442,7 @@ class Al_Time_Tracker_Admin {
     public function get_user_work_time_for_month($user_ID, $month) {
 
         $user_data = $this->get_user_work_time($user_ID);
+
         if(empty($user_data)) return array();
 
         $month_next = strtotime("+1 month", $month);
@@ -467,8 +464,11 @@ class Al_Time_Tracker_Admin {
 
         if(!isset($_GET['al_get_csv'])) return;
 
-        $user_ID = isset($_GET['user_id']) ? $_GET['user_id'] : false;
-        $month = isset($_GET['month']) ? $_GET['month'] : false;
+        $user_ID = isset($_GET['user_id']) ? intval($_GET['user_id']) : false;
+        $month = isset($_GET['month']) ? intval($_GET['month']) : false;
+
+        if(!$user_ID || !$month) return;
+        if(get_userdata($user_ID) == false) return;
 
         $data = $this->get_user_work_time_for_month($user_ID, $month);
 
@@ -479,7 +479,7 @@ class Al_Time_Tracker_Admin {
     }
 
     /**
-     * returns an array ready for converting to CSV
+     * Returns an array ready for converting to CSV
      * @param $arr
      * @param $user_ID
      * @param $month
@@ -511,8 +511,6 @@ class Al_Time_Tracker_Admin {
 
         $csv_url = plugin_dir_url(dirname(__FILE__)). 'csv/';
         $file_url = $csv_url . $file_name;
-
-//        wp_redirect($file_url);
 
 
         header('Content-type:  application/csv');
